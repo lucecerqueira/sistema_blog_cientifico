@@ -31,7 +31,7 @@ from .models import (
     CursoTrilha, ModuloAula, MatriculaAluno, SubmissaoProjetoAluno, ConfiguracaoPlataforma
 )
 from .forms import (
-    CadastroProfissionalForm, ArtigoCientificoForm, RepositorioCodigoForm,
+    CadastroSimplesForm, ArtigoCientificoForm, RepositorioCodigoForm,
     MatriculaGestaoForm, SubmissaoAlunoForm
 )
 
@@ -204,7 +204,8 @@ class EmitirCertificadoAlunoPDFView(LoginRequiredMixin, View):
         pdf.drawString(50, altura - 120, f"Aluno(a): {request.user.get_full_name() or request.user.username}")
         pdf.setFont("Helvetica", 11)
         pdf.setFillColor(colors.HexColor('#94a3b8'))
-        pdf.drawString(50, altura - 140, f"Instituicao: {request.user.instituicao or 'Pesquisa Independente'}")
+        instituicao_aluno = getattr(request.user, 'instituicao', '') or 'Pesquisa Independente'
+        pdf.drawString(50, altura - 140, f"Instituicao: {instituicao_aluno}")
         pdf.drawString(50, altura - 160, f"E-mail Registrado: {request.user.email}")
 
         pdf.setFillColor(colors.HexColor('#38bdf8'))
@@ -333,29 +334,36 @@ class SiteManagementView(GestorRequiredMixin, TemplateView):
 
 
 # ==============================================================================
-# AUTENTICACAO, CADASTRO COM E-MAIL REAL E REDIRECIONAMENTO INTELIGENTE
+# CADASTRO SIMPLIFICADO, AUTENTICACAO E REDIRECIONAMENTO
 # ==============================================================================
 class CadastroProfissionalView(CreateView):
     model = User
-    form_class = CadastroProfissionalForm
+    form_class = CadastroSimplesForm
     template_name = 'ds_platform/register.html'
     success_url = reverse_lazy('student_portal')
 
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect('redirecionar_acesso')
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
-        user = form.save()
+        user = form.save(commit=False)
+        user.papel = 'aluno'
+        user.save()
+
         curso_inicial = CursoTrilha.objects.filter(ativo=True).first()
         if curso_inicial:
             MatriculaAluno.objects.get_or_create(aluno=user, curso=curso_inicial, defaults={'progresso_percentual': 5.0})
 
         try:
             send_mail(
-                subject="Bem-vindo(a) a Plataforma QUANTUM.DS - Credenciais Ativas",
+                subject="Bem-vindo(a) a Plataforma - Conta Ativada",
                 message=(
-                    f"Prezado(a) {user.get_full_name()},\n\n"
-                    f"Seu cadastro profissional na plataforma de Ciencia de Dados, Modelagem e Engenharia (Python/Rust) foi confirmado.\n"
-                    f"Instituicao vinculada: {user.instituicao}\n"
-                    f"Perfil de acesso: {user.get_papel_display()}\n\n"
-                    f"Voce ja pode acessar os repositorios de codigo, artigos matematicos e trilhas de aprendizado."
+                    f"Ola {user.username},\n\n"
+                    f"Sua conta na plataforma foi criada com sucesso.\n"
+                    f"E-mail de acesso e recuperacao cadastrado: {user.email}\n\n"
+                    f"Bons estudos!"
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
@@ -365,7 +373,7 @@ class CadastroProfissionalView(CreateView):
             pass
 
         login(self.request, user, backend='django.contrib.auth.backends.ModelBackend')
-        messages.success(self.request, "Cadastro profissional concluido e e-mail de confirmacao disparado.")
+        messages.success(self.request, f"Bem-vindo(a), {user.username}! Sua conta foi criada.")
         return redirect('student_portal')
 
 
@@ -452,7 +460,6 @@ class ExecuteSandboxAPIView(View):
                         codigo
                         .replace("/*__X_DATA__*/", x_rust_array)
                         .replace("/*__Y_DATA__*/", y_rust_array)
-                        # Auto-corrige chaves simples no println! do RESULT_JSON caso venha do cache do navegador
                         .replace('RESULT_JSON:{\\"b1\\"', 'RESULT_JSON:{{\\"b1\\"')
                         .replace('RESULT_JSON:{"b1"', 'RESULT_JSON:{{"b1"')
                     )
@@ -482,7 +489,6 @@ class ExecuteSandboxAPIView(View):
                             stderr_output = proc.stderr
                             houve_erro = (proc.returncode != 0)
                     except (FileNotFoundError, PermissionError, OSError):
-                        # Caso o compilador rustc nao esteja instalado (ou em ambiente serverless como Vercel)
                         usou_compilador_nativo = False
                         houve_erro = False
                         inicio_t = time.perf_counter()
@@ -512,7 +518,6 @@ class ExecuteSandboxAPIView(View):
 
             tempo_ms = round((time.perf_counter() - inicio_t) * 1000.0, 3)
 
-            # Extrai metricas do RESULT_JSON impresso pelo script do usuario
             metricas = {"b1": 0.0, "b0": 0.0, "r2": 0.0, "mse": 0.0}
             linhas_limpas = []
             for linha in stdout_output.splitlines():

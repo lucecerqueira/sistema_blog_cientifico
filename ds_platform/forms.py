@@ -88,3 +88,61 @@ class SubmissaoAlunoForm(forms.ModelForm):
         self.fields['matricula'].queryset = MatriculaAluno.objects.filter(aluno=user)
         for field in self.fields.values():
             field.widget.attrs['class'] = TAILWIND_INPUT
+
+from django import forms
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+
+User = get_user_model()
+
+class CadastroSimplesForm(forms.ModelForm):
+    password = forms.CharField(
+        label="Senha",
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-100 focus:outline-none focus:border-cyan-500',
+            'placeholder': '••••••••'
+        })
+    )
+    confirm_password = forms.CharField(
+        label="Confirmação de senha",
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-100 focus:outline-none focus:border-cyan-500',
+            'placeholder': '••••••••'
+        })
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'email']
+        widgets = {
+            'username': forms.TextInput(attrs={
+                'class': 'w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-100 focus:outline-none focus:border-cyan-500',
+                'placeholder': 'ex: lucenildo'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-100 focus:outline-none focus:border-cyan-500',
+                'placeholder': 'seuemail@exemplo.com'
+            }),
+        }
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise ValidationError("Este e-mail já está em uso.")
+        return email
+
+    def clean(self):
+        cleaned_data = super().clean()
+        senha = cleaned_data.get('password')
+        confirma = cleaned_data.get('confirm_password')
+
+        if senha and confirma and senha != confirma:
+            self.add_error('confirm_password', 'As senhas informadas não coincidem.')
+        return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data['password'])
+        if commit:
+            user.save()
+        return user
