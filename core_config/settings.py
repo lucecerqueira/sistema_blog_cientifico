@@ -5,23 +5,18 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
-    DJANGO_DEBUG=(bool, True),
+    DJANGO_DEBUG=(bool, False),
     USE_POSTGRES=(bool, True),
 )
 environ.Env.read_env(BASE_DIR / '.env')
 
-SECRET_KEY = env('DJANGO_SECRET_KEY', default='fallback-secret-key')
+SECRET_KEY = env('DJANGO_SECRET_KEY', default='fallback-secret-key-change-in-production')
 DEBUG = env('DJANGO_DEBUG')
 ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['*'])
-# settings.py
 
-# Avisa o Django que o Render termina o HTTPS no proxy
+# Configuração de Proxy Reverso e HTTPS no Render
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
-
-# Garante que o allauth use HTTPS e aceite o fluxo de conta
-ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'https'
-SOCIALACCOUNT_STORE_TOKENS = False
 
 SITE_ID = 1
 
@@ -63,7 +58,10 @@ ROOT_URLCONF = 'core_config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [
+            BASE_DIR / 'templates',
+            BASE_DIR / 'ds_platform' / 'templates',
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -71,7 +69,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'ds_platform.context_processors.platform_context',
             ],
         },
     },
@@ -79,7 +76,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core_config.wsgi.application'
 
-# Configuracao Hibrida PostgreSQL com Fallback inteligente caso o banco ainda nao exista
+# Configuração Híbrida PostgreSQL com Fallback para SQLite
 if env('USE_POSTGRES'):
     try:
         import psycopg2
@@ -112,12 +109,17 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/redirecionar-acesso/'
 LOGOUT_REDIRECT_URL = '/'
 
-# Configuracoes do Django Allauth (Google, GitHub e E-mail Profissional)
+# Configurações do Django Allauth
 ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
 ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_EMAIL_VERIFICATION = 'optional'
-ACCOUNT_USERNAME_REQUIRED = True
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'https'
+
+# Comportamento do Login Social
 SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_STORE_TOKENS = False
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
@@ -139,7 +141,7 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 
-# Configuracao de E-mail Real com Fallback para Console em Desenvolvimento sem credenciais
+# Configuração de E-mail
 EMAIL_HOST_USER_VAL = env('EMAIL_HOST_USER', default='')
 if EMAIL_HOST_USER_VAL and EMAIL_HOST_USER_VAL != 'seu_email_profissional@gmail.com':
     EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
@@ -162,9 +164,17 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Compressão e armazenamento de arquivos estáticos pelo WhiteNoise
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:8040', 'http://localhost:8040', 'http://0.0.0.0:8040']
+CSRF_TRUSTED_ORIGINS = [
+    'https://sistema-blog-cientifico.onrender.com',
+    'http://127.0.0.1:8040',
+    'http://localhost:8040',
+    'http://0.0.0.0:8040',
+]
