@@ -1,0 +1,116 @@
+{% extends 'ds_platform/base.html' %}
+{% block title %}Gestao de Alunos | {{ plataforma_config.nome_plataforma }}{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+    <div class="bg-slate-900 rounded-2xl border border-amber-800/50 p-6 sm:p-8 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <span class="text-xs font-mono uppercase tracking-widest text-amber-400">AREA 05 // GESTAO DOCENTE DE ALUNOS E PESQUISADORES</span>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Controle de Cohort, Desempenho e Revisao de Codigo</h1>
+            <p class="text-xs font-mono text-slate-400 mt-1">Avalie entregas com envio automatico de parecer por e-mail SMTP ao aluno.</p>
+        </div>
+        <div class="font-mono text-xs bg-slate-950 px-4 py-3 rounded-xl border border-slate-800">
+            <span class="text-slate-400">Progresso Medio da Turma:</span> <strong class="text-amber-400">{{ media_progresso|floatformat:1 }}%</strong>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+        <!-- AVALIACAO DE SUBMISSOES DE ALUNOS -->
+        <div class="lg:col-span-2 bg-slate-900 rounded-2xl border border-slate-800 p-6">
+            <h2 class="text-lg font-bold text-white font-mono mb-4">Submissoes de Projetos dos Alunos (Code Review)</h2>
+            <div class="space-y-4">
+                {% for sub in submissoes %}
+                <div class="bg-slate-950 rounded-xl border border-slate-800 p-5 font-mono text-xs">
+                    <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+                        <div>
+                            <span class="text-amber-400 font-bold">{{ sub.matricula.aluno.get_full_name|default:sub.matricula.aluno.username }}</span>
+                            <span class="text-slate-500">({{ sub.matricula.aluno.email }})</span>
+                        </div>
+                        <span class="px-2.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300">{{ sub.matricula.curso.titulo }}</span>
+                    </div>
+                    <p class="text-sm font-bold text-white">{{ sub.titulo_entrega }}</p>
+                    <p class="text-slate-400 my-2 font-sans">{{ sub.relatorio_metodologico }}</p>
+                    <p class="mb-3"><a href="{{ sub.repositorio_link }}" target="_blank" class="text-cyan-400 hover:underline">Abrir Repositorio Submetido ({{ sub.repositorio_link }})</a></p>
+
+                    <form method="post" class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-800">
+                        {% csrf_token %}
+                        <input type="hidden" name="acao" value="avaliar_submissao">
+                        <input type="hidden" name="submissao_id" value="{{ sub.id }}">
+                        <div>
+                            <select name="status_avaliacao" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                                <option value="aprovado" {% if sub.status_avaliacao == 'aprovado' %}selected{% endif %}>Aprovado</option>
+                                <option value="revisao" {% if sub.status_avaliacao == 'revisao' %}selected{% endif %}>Requer Ajustes</option>
+                                <option value="pendente" {% if sub.status_avaliacao == 'pendente' %}selected{% endif %}>Pendente</option>
+                            </select>
+                        </div>
+                        <div>
+                            <input type="number" step="0.1" min="0" max="10" name="nota_atribuida" value="{{ sub.nota_atribuida|default:'' }}" placeholder="Nota (0-10)" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <input type="text" name="feedback_professor" value="{{ sub.feedback_professor }}" placeholder="Parecer tecnico enviado por e-mail..." class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                        </div>
+                        <div class="sm:col-span-4 text-right">
+                            <button type="submit" class="px-4 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold uppercase">
+                                Salvar Nota & Notificar Aluno por E-mail
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                {% empty %}
+                <p class="text-xs font-mono text-slate-500">Nenhuma submissao pendente no momento.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ALOCAR MATRICULA MANUALMENTE -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6">
+            <h2 class="text-lg font-bold text-white font-mono mb-4">Alocar Aluno em Trilha</h2>
+            <form method="post" class="space-y-3 font-mono text-xs">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="criar_matricula">
+                {% for field in form_matricula %}
+                <div>
+                    <label class="block text-slate-400 mb-1">{{ field.label }}</label>
+                    {{ field }}
+                </div>
+                {% endfor %}
+                <button type="submit" class="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold uppercase transition">
+                    Registrar Matricula
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABELA GERAL DO COHORT DE ALUNOS -->
+    <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden font-mono text-xs">
+        <div class="px-6 py-4 border-b border-slate-800">
+            <h3 class="font-bold text-white uppercase">Relacao Geral de Alunos Matriculados</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-slate-950 text-slate-400 uppercase text-[11px]">
+                    <tr>
+                        <th class="px-6 py-3.5">Aluno / Pesquisador</th>
+                        <th class="px-6 py-3.5">Instituicao</th>
+                        <th class="px-6 py-3.5">Trilha Vinculada</th>
+                        <th class="px-6 py-3.5">Progresso</th>
+                        <th class="px-6 py-3.5">Nota Pratica</th>
+                        <th class="px-6 py-3.5">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                    {% for m in matriculas %}
+                    <tr class="hover:bg-slate-950/50">
+                        <td class="px-6 py-3.5 font-semibold text-white">{{ m.aluno.get_full_name|default:m.aluno.username }} ({{ m.aluno.email }})</td>
+                        <td class="px-6 py-3.5 text-slate-300">{{ m.aluno.instituicao|default:"-" }}</td>
+                        <td class="px-6 py-3.5 text-cyan-400">{{ m.curso.titulo }}</td>
+                        <td class="px-6 py-3.5 text-emerald-400 font-bold">{{ m.progresso_percentual|floatformat:0 }}%</td>
+                        <td class="px-6 py-3.5">{{ m.nota_avaliacao_pratica|default:"-" }}</td>
+                        <td class="px-6 py-3.5">{{ m.get_status_display }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'ds_platform/base.html' %}
+{% block title %}Gestao da Pagina (CMS) | {{ plataforma_config.nome_plataforma }}{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+    <div class="bg-slate-900 rounded-2xl border border-emerald-800/50 p-6 sm:p-8 mb-8">
+        <span class="text-xs font-mono uppercase tracking-widest text-emerald-400">AREA 06 // GESTAO EDITORIAL E ARQUITETURA DA PAGINA</span>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Publicacao de Artigos Cientificos e Repositorios Python/Rust</h1>
+        <p class="text-xs font-mono text-slate-400 mt-1">Gerencie o conteudo da plataforma sem precisar sair do front-end.</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- FORMULARIO NOVO ARTIGO DO BLOG -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6">
+            <h2 class="text-lg font-bold text-white font-mono mb-4">Publicar Novo Artigo Cientifico (Markdown + LaTeX)</h2>
+            <form method="post" class="space-y-3 font-mono text-xs">
+                {% csrf_token %}
+                <input type="hidden" name="tipo_form" value="novo_artigo">
+                {% for field in form_artigo %}
+                <div>
+                    <label class="block text-slate-400 mb-1">{{ field.label }}</label>
+                    {{ field }}
+                </div>
+                {% endfor %}
+                <button type="submit" class="w-full py-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold uppercase transition">
+                    Publicar Artigo no Blog
+                </button>
+            </form>
+        </div>
+
+        <!-- FORMULARIO NOVO CODIGO PYTHON/RUST -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6">
+            <h2 class="text-lg font-bold text-white font-mono mb-4">Publicar Algoritmo no Laboratorio de Codigo (Python/Rust)</h2>
+            <form method="post" class="space-y-3 font-mono text-xs">
+                {% csrf_token %}
+                <input type="hidden" name="tipo_form" value="novo_codigo">
+                {% for field in form_codigo %}
+                <div>
+                    <label class="block text-slate-400 mb-1">{{ field.label }}</label>
+                    {{ field }}
+                </div>
+                {% endfor %}
+                <button type="submit" class="w-full py-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold uppercase transition">
+                    Adicionar Codigo ao Repositorio
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

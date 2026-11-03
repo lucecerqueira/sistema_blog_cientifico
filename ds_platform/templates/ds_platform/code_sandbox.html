@@ -1,0 +1,394 @@
+{% extends 'ds_platform/base.html' %}
+{% block title %}Sandbox Interativo Python & Rust | {{ plataforma_config.nome_plataforma }}{% endblock %}
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+    <!-- CABECALHO DO LABORATORIO -->
+    <div class="bg-slate-900 rounded-2xl border border-cyan-800/50 p-6 sm:p-8 mb-8">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+                <span class="text-xs font-mono uppercase tracking-widest text-amber-400">LIVE EXECUTION ENGINE // PYTHON 3 & RUST</span>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Laboratorio Interativo: Regressao Linear do Zero (OLS)</h1>
+                <p class="text-xs sm:text-sm text-slate-300 mt-2 max-w-3xl">
+                    Altere os parametros matematicos da simulacao, modifique o codigo-fonte em <strong>Python</strong> ou <strong>Rust</strong> sem bibliotecas de Machine Learning externas e compare o ajuste da reta $\hat{y} = \beta_1 x + \beta_0$ em tempo real.
+                </p>
+            </div>
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono shrink-0">
+                <div class="text-cyan-400 font-bold mb-1">FORMULACAO ANALITICA (MINIMOS QUADRADOS):</div>
+                <div>$$\beta_1 = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sum (x_i - \bar{x})^2}, \quad \beta_0 = \bar{y} - \beta_1\bar{x}$$</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAINEL DE PARAMETROS INTERATIVOS DO DATASET -->
+    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 mb-8 font-mono text-xs">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+            <span class="text-white font-bold uppercase">1. Parametros do Gerador Estocastico de Dados ($y = \beta_1 x + \beta_0 + \epsilon, \quad \epsilon \sim \mathcal{N}(0, \sigma^2)$)</span>
+            <button onclick="executarAmbos()" class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold uppercase transition">
+                Executar Python + Rust & Atualizar Grafico
+            </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div>
+                <label class="flex justify-between text-slate-300 mb-1">
+                    <span>Tamanho Amostral ($N$):</span>
+                    <strong id="val-n" class="text-cyan-400">60</strong>
+                </label>
+                <input type="range" id="param-n" min="15" max="250" step="5" value="60" oninput="document.getElementById('val-n').innerText=this.value" class="w-full accent-cyan-400">
+            </div>
+            <div>
+                <label class="flex justify-between text-slate-300 mb-1">
+                    <span>Inclinacao Real ($\beta_1$):</span>
+                    <strong id="val-b1" class="text-cyan-400">2.5</strong>
+                </label>
+                <input type="range" id="param-b1" min="-5.0" max="8.0" step="0.5" value="2.5" oninput="document.getElementById('val-b1').innerText=this.value" class="w-full accent-cyan-400">
+            </div>
+            <div>
+                <label class="flex justify-between text-slate-300 mb-1">
+                    <span>Intercepto Real ($\beta_0$):</span>
+                    <strong id="val-b0" class="text-cyan-400">10.0</strong>
+                </label>
+                <input type="range" id="param-b0" min="-20.0" max="40.0" step="2.0" value="10.0" oninput="document.getElementById('val-b0').innerText=this.value" class="w-full accent-cyan-400">
+            </div>
+            <div>
+                <label class="flex justify-between text-slate-300 mb-1">
+                    <span>Desvio do Ruido ($\sigma$):</span>
+                    <strong id="val-ruido" class="text-amber-400">4.5</strong>
+                </label>
+                <input type="range" id="param-ruido" min="0.5" max="20.0" step="0.5" value="4.5" oninput="document.getElementById('val-ruido').innerText=this.value" class="w-full accent-amber-400">
+            </div>
+        </div>
+    </div>
+
+    <!-- GRAFICO COMPARATIVO E METRICAS DE BENCHMARK -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
+        <div class="lg:col-span-8 bg-slate-900 rounded-2xl border border-slate-800 p-6">
+            <div class="flex items-center justify-between mb-4 font-mono text-xs">
+                <span class="font-bold text-white uppercase">Visualizacao do Ajuste de Regressao Linear (Dispersao & Retas Estimadas)</span>
+                <span id="status-execucao" class="px-2.5 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">Pronto</span>
+            </div>
+            <div class="h-80 sm:h-96 w-full">
+                <canvas id="graficoRegressao"></canvas>
+            </div>
+        </div>
+
+        <div class="lg:col-span-4 space-y-4 font-mono text-xs">
+            <!-- CARD RESULTADO PYTHON -->
+            <div class="bg-slate-900 rounded-2xl border border-cyan-800/60 p-5">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-3">
+                    <span class="text-cyan-400 font-bold uppercase">MODELO PYTHON (OOP)</span>
+                    <span id="py-time" class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300">-- ms</span>
+                </div>
+                <div class="space-y-1.5 text-slate-300">
+                    <div class="flex justify-between"><span>Inclinacao Estimada ($\hat{\beta}_1$):</span><strong id="py-b1" class="text-white">--</strong></div>
+                    <div class="flex justify-between"><span>Intercepto Estimado ($\hat{\beta}_0$):</span><strong id="py-b0" class="text-white">--</strong></div>
+                    <div class="flex justify-between"><span>Coeficiente $R^2$:</span><strong id="py-r2" class="text-emerald-400">--</strong></div>
+                    <div class="flex justify-between"><span>Erro Quadratico (MSE):</span><strong id="py-mse" class="text-amber-400">--</strong></div>
+                </div>
+            </div>
+
+            <!-- CARD RESULTADO RUST -->
+            <div class="bg-slate-900 rounded-2xl border border-amber-800/60 p-5">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-3">
+                    <span class="text-amber-400 font-bold uppercase">MODELO RUST (STRUCT & SLICES)</span>
+                    <span id="rs-time" class="px-2 py-0.5 rounded bg-amber-950 text-amber-300">-- ms</span>
+                </div>
+                <div class="space-y-1.5 text-slate-300">
+                    <div class="flex justify-between"><span>Inclinacao Estimada ($\hat{\beta}_1$):</span><strong id="rs-b1" class="text-white">--</strong></div>
+                    <div class="flex justify-between"><span>Intercepto Estimado ($\hat{\beta}_0$):</span><strong id="rs-b0" class="text-white">--</strong></div>
+                    <div class="flex justify-between"><span>Coeficiente $R^2$:</span><strong id="rs-r2" class="text-emerald-400">--</strong></div>
+                    <div class="flex justify-between"><span>Erro Quadratico (MSE):</span><strong id="rs-mse" class="text-amber-400">--</strong></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-950 rounded-xl border border-slate-800 p-4 text-[11px] text-slate-400 leading-relaxed">
+                <strong class="text-slate-200 block mb-1">Dica de Experimentacao Didatica:</strong>
+                No editor ao lado, tente somar um vies ao parametro <code class="text-cyan-400">self.b0</code> ou alterar a formula da inclinacao para observar imediatamente a reta descolar dos dados e o $R^2$ cair no grafico!
+            </div>
+        </div>
+    </div>
+
+    <!-- EDITORES DE CODIGO LADO A LADO: PYTHON E RUST -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 font-mono text-xs">
+        <!-- EDITOR PYTHON -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+            <div class="bg-slate-950 px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+                <span class="text-cyan-400 font-bold">PYTHON 3.12+ // regressao_ols.py (Editavel)</span>
+                <button onclick="executarLinguagem('python')" class="px-3 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold uppercase transition">
+                    Rodar Python
+                </button>
+            </div>
+            <textarea id="editor-python" rows="22" spellcheck="false" class="w-full bg-[#090d16] text-slate-100 p-4 font-mono text-xs focus:outline-none resize-y leading-relaxed">import json
+
+class RegressaoLinearOLS:
+    def __init__(self):
+        self.b1 = 0.0  # Coeficiente angular (inclinacao)
+        self.b0 = 0.0  # Intercepto linear
+
+    def fit(self, x: list[float], y: list[float]) -> None:
+        n = len(x)
+        media_x = sum(x) / n
+        media_y = sum(y) / n
+
+        numerador = sum((x[i] - media_x) * (y[i] - media_y) for i in range(n))
+        denominador = sum((x[i] - media_x) ** 2 for i in range(n))
+
+        self.b1 = numerador / denominador if denominador != 0 else 0.0
+        self.b0 = media_y - (self.b1 * media_x)
+
+    def predict(self, x: list[float]) -> list[float]:
+        return [(self.b1 * xi) + self.b0 for xi in x]
+
+    def avaliar(self, x: list[float], y: list[float]) -> tuple[float, float]:
+        y_pred = self.predict(x)
+        media_y = sum(y) / len(y)
+        ss_res = sum((y[i] - y_pred[i]) ** 2 for i in range(len(y)))
+        ss_tot = sum((y[i] - media_y) ** 2 for i in range(len(y)))
+        r2 = 1.0 - (ss_res / ss_tot) if ss_tot != 0 else 0.0
+        mse = ss_res / len(y)
+        return r2, mse
+
+if __name__ == "__main__":
+    with open("dataset.json", "r") as f:
+        dados = json.load(f)
+    X, Y = dados["x"], dados["y"]
+
+    modelo = RegressaoLinearOLS()
+    modelo.fit(X, Y)
+    r2, mse = modelo.avaliar(X, Y)
+
+    print(f"Amostras processadas (N): {len(X)}")
+    print(f"Equacao ajustada: y = {modelo.b1:.4f}x + {modelo.b0:.4f}")
+    print(f"Coeficiente de Determinacao (R2): {r2:.4f}")
+    print(f"Erro Quadratico Medio (MSE): {mse:.4f}")
+    print("RESULT_JSON:" + json.dumps({"b1": modelo.b1, "b0": modelo.b0, "r2": r2, "mse": mse}))
+</textarea>
+            <div class="bg-slate-950 px-4 py-2 border-t border-slate-800 text-slate-400"> SAIDA DO TERMINAL (STDOUT PYTHON):</div>
+            <pre id="out-python" class="bg-black text-emerald-400 p-4 text-[11px] h-36 overflow-y-auto">Aguardando execucao...</pre>
+        </div>
+
+        <!-- EDITOR RUST -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+            <div class="bg-slate-950 px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+                <span class="text-amber-400 font-bold">RUST EDITION 2024 // regressao_ols.rs (Editavel)</span>
+                <button onclick="executarLinguagem('rust')" class="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold uppercase transition">
+                    Compilar & Rodar Rust
+                </button>
+            </div>
+            <textarea id="editor-rust" rows="22" spellcheck="false" class="w-full bg-[#090d16] text-slate-100 p-4 font-mono text-xs focus:outline-none resize-y leading-relaxed">struct RegressaoLinearOLS {
+    b1: f64,
+    b0: f64,
+}
+
+impl RegressaoLinearOLS {
+    fn new() -> Self {
+        Self { b1: 0.0, b0: 0.0 }
+    }
+
+    fn fit(&mut self, x: &[f64], y: &[f64]) {
+        let n = x.len() as f64;
+        let media_x: f64 = x.iter().sum::<f64>() / n;
+        let media_y: f64 = y.iter().sum::<f64>() / n;
+
+        let mut numerador = 0.0;
+        let mut denominador = 0.0;
+
+        for i in 0..x.len() {
+            let dx = x[i] - media_x;
+            numerador += dx * (y[i] - media_y);
+            denominador += dx * dx;
+        }
+
+        self.b1 = if denominador != 0.0 { numerador / denominador } else { 0.0 };
+        self.b0 = media_y - (self.b1 * media_x);
+    }
+
+    fn predict(&self, x: f64) -> f64 {
+        (self.b1 * x) + self.b0
+    }
+
+    fn avaliar(&self, x: &[f64], y: &[f64]) -> (f64, f64) {
+        let n = y.len() as f64;
+        let media_y: f64 = y.iter().sum::<f64>() / n;
+        let mut ss_res = 0.0;
+        let mut ss_tot = 0.0;
+
+        for i in 0..x.len() {
+            let err = y[i] - self.predict(x[i]);
+            let tot = y[i] - media_y;
+            ss_res += err * err;
+            ss_tot += tot * tot;
+        }
+        let r2 = if ss_tot != 0.0 { 1.0 - (ss_res / ss_tot) } else { 0.0 };
+        let mse = ss_res / n;
+        (r2, mse)
+    }
+}
+
+fn main() {
+    let x: &[f64] = &[/*__X_DATA__*/];
+    let y: &[f64] = &[/*__Y_DATA__*/];
+
+    let mut modelo = RegressaoLinearOLS::new();
+    modelo.fit(x, y);
+    let (r2, mse) = modelo.avaliar(x, y);
+
+    println!("Amostras processadas em Rust (N): {}", x.len());
+    println!("Equacao ajustada: y = {:.4}x + {:.4}", modelo.b1, modelo.b0);
+    println!("Coeficiente de Determinacao (R2): {:.4}", r2);
+    println!("Erro Quadratico Medio (MSE): {:.4}", mse);
+    println!("RESULT_JSON:{\"b1\": {:.6}, \"b0\": {:.6}, \"r2\": {:.6}, \"mse\": {:.6}}", modelo.b1, modelo.b0, r2, mse);
+}
+</textarea>
+            <div class="bg-slate-950 px-4 py-2 border-t border-slate-800 text-slate-400"> SAIDA DO TERMINAL (STDOUT RUST):</div>
+            <pre id="out-rust" class="bg-black text-amber-400 p-4 text-[11px] h-36 overflow-y-auto">Aguardando compilacao e execucao...</pre>
+        </div>
+    </div>
+</div>
+
+<script>
+let chartInstance = null;
+let estadoGrafico = {
+    x: [],
+    y: [],
+    py_hat: [],
+    rs_hat: []
+};
+
+function inicializarGrafico() {
+    const ctx = document.getElementById('graficoRegressao').getContext('2d');
+    chartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
+                    label: 'Observacoes Amostrais (X, Y)',
+                    data: [],
+                    backgroundColor: 'rgba(148, 163, 184, 0.65)',
+                    borderColor: 'rgba(148, 163, 184, 0.9)',
+                    pointRadius: 4
+                },
+                {
+                    label: 'Ajuste OLS Python (Linha Continua)',
+                    data: [],
+                    type: 'line',
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'transparent',
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    tension: 0
+                },
+                {
+                    label: 'Ajuste OLS Rust (Linha Tracejada)',
+                    data: [],
+                    type: 'line',
+                    borderColor: '#f59e0b',
+                    borderDash: [6, 6],
+                    backgroundColor: 'transparent',
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    tension: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'linear',
+                    position: 'bottom',
+                    title: { display: true, text: 'Variavel Explicativa (X)', color: '#94a3b8' },
+                    grid: { color: '#1e293b' },
+                    ticks: { color: '#94a3b8' }
+                },
+                y: {
+                    title: { display: true, text: 'Variavel Resposta (Y)', color: '#94a3b8' },
+                    grid: { color: '#1e293b' },
+                    ticks: { color: '#94a3b8' }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: '#e2e8f0', font: { family: 'JetBrains Mono', size: 11 } } }
+            }
+        }
+    });
+}
+
+function atualizarGraficoVisual() {
+    if (!chartInstance) return;
+    const scatterPoints = estadoGrafico.x.map((xi, idx) => ({ x: xi, y: estadoGrafico.y[idx] }));
+    const pyLine = estadoGrafico.x.map((xi, idx) => ({ x: xi, y: estadoGrafico.py_hat[idx] }));
+    const rsLine = estadoGrafico.x.map((xi, idx) => ({ x: xi, y: estadoGrafico.rs_hat[idx] }));
+
+    chartInstance.data.datasets[0].data = scatterPoints;
+    chartInstance.data.datasets[1].data = pyLine;
+    chartInstance.data.datasets[2].data = rsLine;
+    chartInstance.update();
+}
+
+async function executarLinguagem(linguagem) {
+    const statusEl = document.getElementById('status-execucao');
+    statusEl.innerText = 'Executando ' + linguagem.toUpperCase() + '...';
+
+    const codigo = document.getElementById('editor-' + linguagem).value;
+    const payload = {
+        linguagem: linguagem,
+        codigo: codigo,
+        n_pontos: document.getElementById('param-n').value,
+        coef_angular: document.getElementById('param-b1').value,
+        intercepto: document.getElementById('param-b0').value,
+        ruido: document.getElementById('param-ruido').value
+    };
+
+    const csrftoken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || "";
+    const resp = await fetch("{% url 'api_executar_codigo' %}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrftoken },
+        body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+
+    const outEl = document.getElementById('out-' + linguagem);
+    if (data.stderr) {
+        outEl.innerText = data.stderr;
+        statusEl.innerText = 'Erro na Execucao';
+        return;
+    }
+
+    outEl.innerText = data.stdout;
+    estadoGrafico.x = data.x;
+    estadoGrafico.y = data.y;
+
+    if (linguagem === 'python') {
+        estadoGrafico.py_hat = data.y_hat;
+        document.getElementById('py-time').innerText = data.tempo_ms + ' ms';
+        document.getElementById('py-b1').innerText = Number(data.metricas.b1).toFixed(4);
+        document.getElementById('py-b0').innerText = Number(data.metricas.b0).toFixed(4);
+        document.getElementById('py-r2').innerText = Number(data.metricas.r2).toFixed(4);
+        document.getElementById('py-mse').innerText = Number(data.metricas.mse).toFixed(4);
+    } else {
+        estadoGrafico.rs_hat = data.y_hat;
+        document.getElementById('rs-time').innerText = data.tempo_ms + ' ms';
+        document.getElementById('rs-b1').innerText = Number(data.metricas.b1).toFixed(4);
+        document.getElementById('rs-b0').innerText = Number(data.metricas.b0).toFixed(4);
+        document.getElementById('rs-r2').innerText = Number(data.metricas.r2).toFixed(4);
+        document.getElementById('rs-mse').innerText = Number(data.metricas.mse).toFixed(4);
+    }
+
+    atualizarGraficoVisual();
+    statusEl.innerText = 'Sincronizado';
+}
+
+async function executarAmbos() {
+    await executarLinguagem('python');
+    await executarLinguagem('rust');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    inicializarGrafico();
+    executarAmbos();
+});
+</script>
+{% endblock %}

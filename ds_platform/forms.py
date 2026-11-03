@@ -1,0 +1,90 @@
+from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from .models import (
+    User, ArtigoCientificoBlog, RepositorioCodigo,
+    CursoTrilha, MatriculaAluno, SubmissaoProjetoAluno, ConfiguracaoPlataforma
+)
+
+TAILWIND_INPUT = "w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-cyan-500 transition"
+
+class CadastroProfissionalForm(UserCreationForm):
+    first_name = forms.CharField(max_length=80, required=True, label="Nome")
+    last_name = forms.CharField(max_length=80, required=True, label="Sobrenome")
+    email = forms.EmailField(required=True, label="E-mail Profissional ou Academico")
+    instituicao = forms.CharField(max_length=150, required=True, label="Instituicao / Empresa")
+    cargo_atuacao = forms.CharField(max_length=120, required=True, label="Area de Atuacao / Cargo")
+    papel = forms.ChoiceField(
+        choices=[('aluno', 'Aluno (Cursos e Trilhas)'), ('pesquisador', 'Pesquisador / Leitor Tecnico')],
+        label="Perfil de Acesso Desejado"
+    )
+
+    class Meta:
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'email', 'instituicao', 'cargo_atuacao', 'papel', 'orcid_id', 'github_url')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = TAILWIND_INPUT
+
+
+class ArtigoCientificoForm(forms.ModelForm):
+    class Meta:
+        model = ArtigoCientificoBlog
+        fields = ['titulo', 'categoria', 'resumo', 'conteudo_markdown', 'referencias_bibliograficas', 'status', 'nivel_acesso', 'destaque_home']
+        widgets = {
+            'resumo': forms.Textarea(attrs={'rows': 3}),
+            'conteudo_markdown': forms.Textarea(attrs={'rows': 12}),
+            'referencias_bibliograficas': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = TAILWIND_INPUT
+
+
+class RepositorioCodigoForm(forms.ModelForm):
+    class Meta:
+        model = RepositorioCodigo
+        fields = ['titulo', 'linguagem', 'categoria', 'descricao_tecnica', 'codigo_fonte', 'dependencias', 'complexidade_tempo', 'benchmark_nota', 'url_repositorio_externo', 'publico']
+        widgets = {
+            'descricao_tecnica': forms.Textarea(attrs={'rows': 3}),
+            'codigo_fonte': forms.Textarea(attrs={'rows': 12, 'class': 'font-mono'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = TAILWIND_INPUT
+
+
+class MatriculaGestaoForm(forms.ModelForm):
+    class Meta:
+        model = MatriculaAluno
+        fields = ['aluno', 'curso', 'status', 'progresso_percentual', 'nota_avaliacao_pratica', 'observacoes_orientador']
+        widgets = {
+            'observacoes_orientador': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = TAILWIND_INPUT
+
+
+class SubmissaoAlunoForm(forms.ModelForm):
+    class Meta:
+        model = SubmissaoProjetoAluno
+        fields = ['matricula', 'titulo_entrega', 'repositorio_link', 'relatorio_metodologico']
+        widgets = {
+            'relatorio_metodologico': forms.Textarea(attrs={'rows': 4}),
+        }
+
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['matricula'].queryset = MatriculaAluno.objects.filter(aluno=user)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = TAILWIND_INPUT
