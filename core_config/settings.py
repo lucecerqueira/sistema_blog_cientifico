@@ -13,6 +13,15 @@ environ.Env.read_env(BASE_DIR / '.env')
 SECRET_KEY = env('DJANGO_SECRET_KEY', default='fallback-secret-key')
 DEBUG = env('DJANGO_DEBUG')
 ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['*'])
+# settings.py
+
+# Avisa o Django que o Render termina o HTTPS no proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
+# Garante que o allauth use HTTPS e aceite o fluxo de conta
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'https'
+SOCIALACCOUNT_STORE_TOKENS = False
 
 SITE_ID = 1
 
