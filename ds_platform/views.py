@@ -1,7 +1,14 @@
 import os
 import sys
+import subprocess
+import tempfile
+import time
+import json
+import math
+import random
 from pathlib import Path
 from io import BytesIO
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, View
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -256,7 +263,6 @@ class StudentManagementView(GestorRequiredMixin, TemplateView):
             sub.feedback_professor = request.POST.get('feedback_professor', '')
             sub.save()
 
-            # Disparo real de e-mail para o aluno
             try:
                 send_mail(
                     subject=f"[Plataforma Data Science] Avaliacao Concluida: {sub.titulo_entrega}",
@@ -337,12 +343,10 @@ class CadastroProfissionalView(CreateView):
 
     def form_valid(self, form):
         user = form.save()
-        # Matricula automaticamente no curso base de boas-vindas se existir
         curso_inicial = CursoTrilha.objects.filter(ativo=True).first()
         if curso_inicial:
             MatriculaAluno.objects.get_or_create(aluno=user, curso=curso_inicial, defaults={'progresso_percentual': 5.0})
 
-        # Envia e-mail real de boas-vindas via SMTP configurado
         try:
             send_mail(
                 subject="Bem-vindo(a) a Plataforma QUANTUM.DS - Credenciais Ativas",
@@ -385,23 +389,21 @@ class CustomLogoutView(View):
         return redirect('public_home')
 
 
-import subprocess
-import tempfile
-import time
-import json
-import math
-import random
-
+# ==============================================================================
+# 7. SANDBOX INTERATIVO DE EXECUCAO (PYTHON & RUST)
+# ==============================================================================
 class InteractiveSandboxView(TemplateView):
     template_name = 'ds_platform/code_sandbox.html'
 
+
+@method_decorator(csrf_exempt, name='dispatch')
 class ExecuteSandboxAPIView(View):
     def post(self, request, *args, **kwargs):
         try:
             payload = json.loads(request.body or "{}")
             linguagem = payload.get("linguagem", "python")
             codigo = payload.get("codigo", "")
-            
+
             try:
                 n_pontos = min(500, max(10, int(payload.get("n_pontos", 60))))
                 coef_angular = float(payload.get("coef_angular", 2.5))
@@ -419,6 +421,7 @@ class ExecuteSandboxAPIView(View):
             stdout_output = ""
             stderr_output = ""
             usou_compilador_nativo = True
+            houve_erro = False
 
             with tempfile.TemporaryDirectory() as tmpdir:
                 dados_json = json.dumps({"x": x_vals, "y": y_vals})
@@ -436,14 +439,23 @@ class ExecuteSandboxAPIView(View):
                     )
                     stdout_output = proc.stdout
                     stderr_output = proc.stderr
+                    houve_erro = (proc.returncode != 0)
 
                 elif linguagem == "rust":
                     rs_file = Path(tmpdir, "main.rs")
                     bin_file = Path(tmpdir, "main_bin")
+
                     # Injeta os vetores X e Y diretamente no template Rust caso o marcador esteja presente
                     x_rust_array = ", ".join(f"{v:.4f}" for v in x_vals)
                     y_rust_array = ", ".join(f"{v:.4f}" for v in y_vals)
-                    codigo_compilavel = codigo.replace("/*__X_DATA__*/", x_rust_array).replace("/*__Y_DATA__*/", y_rust_array)
+                    codigo_compilavel = (
+                        codigo
+                        .replace("/*__X_DATA__*/", x_rust_array)
+                        .replace("/*__Y_DATA__*/", y_rust_array)
+                        # Auto-corrige chaves simples no println! do RESULT_JSON caso venha do cache do navegador
+                        .replace('RESULT_JSON:{\\"b1\\"', 'RESULT_JSON:{{\\"b1\\"')
+                        .replace('RESULT_JSON:{"b1"', 'RESULT_JSON:{{"b1"')
+                    )
                     rs_file.write_text(codigo_compilavel, encoding="utf-8")
 
                     try:
@@ -456,6 +468,7 @@ class ExecuteSandboxAPIView(View):
                         )
                         if comp.returncode != 0:
                             stderr_output = comp.stderr
+                            houve_erro = True
                         else:
                             inicio_t = time.perf_counter()
                             proc = subprocess.run(
@@ -467,15 +480,17 @@ class ExecuteSandboxAPIView(View):
                             )
                             stdout_output = proc.stdout
                             stderr_output = proc.stderr
-                    except FileNotFoundError:
-                        # Caso o compilador rustc nao esteja instalado no Linux Mint, executa motor numerico equivalente
+                            houve_erro = (proc.returncode != 0)
+                    except (FileNotFoundError, PermissionError, OSError):
+                        # Caso o compilador rustc nao esteja instalado (ou em ambiente serverless como Vercel)
                         usou_compilador_nativo = False
+                        houve_erro = False
                         inicio_t = time.perf_counter()
                         n = float(len(x_vals))
                         mean_x = sum(x_vals) / n
                         mean_y = sum(y_vals) / n
-                        num = sum((x_vals[i] - mean_x) * (y_vals[i] - mean_y) for i in range( int(n) ))
-                        den = sum((x_vals[i] - mean_x) ** 2 for i in range( int(n) ))
+                        num = sum((x_vals[i] - mean_x) * (y_vals[i] - mean_y) for i in range(int(n)))
+                        den = sum((x_vals[i] - mean_x) ** 2 for i in range(int(n)))
                         b1 = num / den if den != 0 else 0.0
                         b0 = mean_y - b1 * mean_x
                         y_pred = [b1 * x + b0 for x in x_vals]
@@ -501,9 +516,10 @@ class ExecuteSandboxAPIView(View):
             metricas = {"b1": 0.0, "b0": 0.0, "r2": 0.0, "mse": 0.0}
             linhas_limpas = []
             for linha in stdout_output.splitlines():
-                if linha.startswith("RESULT_JSON:"):
+                if "RESULT_JSON:" in linha:
                     try:
-                        metricas = json.loads(linha.replace("RESULT_JSON:", "").strip())
+                        json_str = linha.split("RESULT_JSON:", 1)[1].strip()
+                        metricas = json.loads(json_str)
                     except Exception:
                         pass
                 else:
@@ -512,9 +528,9 @@ class ExecuteSandboxAPIView(View):
             y_hat = [round(metricas.get("b1", 0.0) * x + metricas.get("b0", 0.0), 4) for x in x_vals]
 
             return JsonResponse({
-                "status": "ok" if not stderr_output else "erro",
+                "status": "erro" if houve_erro else "ok",
                 "stdout": "\n".join(linhas_limpas),
-                "stderr": stderr_output,
+                "stderr": stderr_output if houve_erro else "",
                 "tempo_ms": tempo_ms,
                 "nativo": usou_compilador_nativo,
                 "x": x_vals,

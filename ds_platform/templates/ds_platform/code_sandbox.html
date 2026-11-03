@@ -24,7 +24,7 @@
     <!-- PAINEL DE PARAMETROS INTERATIVOS DO DATASET -->
     <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 mb-8 font-mono text-xs">
         <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-            <span class="text-white font-bold uppercase">1. Parametros do Gerador Estocastico de Dados ($y = \beta_1 x + \beta_0 + \epsilon, \quad \epsilon \sim \mathcal{N}(0, \sigma^2)$)</span>
+            <span class="text-white font-bold uppercase">Parametros do Gerador Estocastico de Dados ($y = \beta_1 x + \beta_0 + \epsilon, \quad \epsilon \sim \mathcal{N}(0, \sigma^2)$)</span>
             <button onclick="executarAmbos()" class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold uppercase transition">
                 Executar Python + Rust & Atualizar Grafico
             </button>
@@ -176,6 +176,7 @@ if __name__ == "__main__":
                     Compilar & Rodar Rust
                 </button>
             </div>
+            {% verbatim %}
             <textarea id="editor-rust" rows="22" spellcheck="false" class="w-full bg-[#090d16] text-slate-100 p-4 font-mono text-xs focus:outline-none resize-y leading-relaxed">struct RegressaoLinearOLS {
     b1: f64,
     b0: f64,
@@ -238,9 +239,10 @@ fn main() {
     println!("Equacao ajustada: y = {:.4}x + {:.4}", modelo.b1, modelo.b0);
     println!("Coeficiente de Determinacao (R2): {:.4}", r2);
     println!("Erro Quadratico Medio (MSE): {:.4}", mse);
-    println!("RESULT_JSON:{\"b1\": {:.6}, \"b0\": {:.6}, \"r2\": {:.6}, \"mse\": {:.6}}", modelo.b1, modelo.b0, r2, mse);
+    println!("RESULT_JSON:{{\"b1\": {:.6}, \"b0\": {:.6}, \"r2\": {:.6}, \"mse\": {:.6}}}", modelo.b1, modelo.b0, r2, mse);
 }
 </textarea>
+            {% endverbatim %}
             <div class="bg-slate-950 px-4 py-2 border-t border-slate-800 text-slate-400"> SAIDA DO TERMINAL (STDOUT RUST):</div>
             <pre id="out-rust" class="bg-black text-amber-400 p-4 text-[11px] h-36 overflow-y-auto">Aguardando compilacao e execucao...</pre>
         </div>
